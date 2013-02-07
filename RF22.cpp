@@ -239,7 +239,8 @@ void RF22::handleInterrupt()
     }
     if (_lastInterruptFlags[0] & RF22_IPKVALID)
     {
-	uint8_t len = spiRead(RF22_REG_4B_RECEIVED_PACKET_LENGTH);
+	//uint8_t len = spiRead(RF22_REG_4B_RECEIVED_PACKET_LENGTH);
+	uint8_t len = spiRead(RF22_REG_3E_PACKET_LENGTH);
 //	Serial.println("IPKVALID");   
 //	Serial.println(len);   
 //	Serial.println(_bufLen);   
@@ -463,6 +464,17 @@ uint8_t RF22::ezmacStatusRead()
 
 void RF22::setMode(uint8_t mode)
 {
+    if (mode & RF22_RXON) {
+	/* In RX mode, set the packet length to the maximum. Once one
+	 * byte is received, readNextFragment below will get the real
+	 * packet length and set that into the length register. */
+	spiWrite(RF22_REG_3E_PACKET_LENGTH, RF22_MAX_MESSAGE_LEN);
+	/* Start by reading a few bytes, so we can find out the length.
+	 * Don't make this lower, since it seems the FIFO gets confused
+	 * when you read only a few bytes and/or set this too low.. */
+	_rxFifoThreshold = 10;
+	spiWrite(RF22_REG_7E_RX_FIFO_CONTROL, _rxFifoThreshold);
+    }
     spiWrite(RF22_REG_07_OPERATING_MODE1, mode);
 }
 
@@ -615,6 +627,12 @@ boolean RF22::recv(uint8_t* buf, uint8_t* len)
     {
 	if (*len > _bufLen)
 	    *len = _bufLen;
+	/* Check length against length in packet, in case the packet is
+	 * very short and readNextFragment was too late with cutting off
+	 * the packet length */
+	uint8_t plen = (_buf[0] ^ 0xff) + 3; /* Add length and two CRC bytes */
+	if (*len > plen)
+		*len = plen;
 	memcpy(buf, _buf, *len);
 	clearRxBuf();
 //    printBuffer("recv:", buf, *len);
@@ -700,12 +718,25 @@ void RF22::sendNextFragment()
 // That means it should only be called after a RXFFAFULL interrupt
 void RF22::readNextFragment()
 {
-    if (((uint16_t)_bufLen + RF22_RXFFAFULL_THRESHOLD) > RF22_MAX_MESSAGE_LEN)
+    if (((uint16_t)_bufLen + _rxFifoThreshold) > RF22_MAX_MESSAGE_LEN)
 	return; // Hmmm receiver overflow. Should never occur
 
-    // Read the RF22_RXFFAFULL_THRESHOLD octets that should be there
-    spiBurstRead(RF22_REG_7F_FIFO_ACCESS, _buf + _bufLen, RF22_RXFFAFULL_THRESHOLD);
-    _bufLen += RF22_RXFFAFULL_THRESHOLD;
+    // Read the _rxFifoThreshold octets that should be there
+    spiBurstRead(RF22_REG_7F_FIFO_ACCESS, _buf + _bufLen, _rxFifoThreshold);
+    _bufLen += _rxFifoThreshold;
+
+    if (_bufLen == _rxFifoThreshold) {
+	/* This was the first read, raise the threshold and find out the
+	 * packet size. */
+	_rxFifoThreshold = RF22_RXFFAFULL_THRESHOLD;
+	spiWrite(RF22_REG_7E_RX_FIFO_CONTROL, _rxFifoThreshold);
+	/* The dewhitening sequence (which is xor'd to the actual data)
+	   starts with 0xff, so xor the first byte with 0xff to get at
+	   the actual packet length sent by the sender. */
+	uint8_t len = (_buf[0] ^ 0xff) + 3; /* Add length and two CRC bytes */
+
+	spiWrite(RF22_REG_3E_PACKET_LENGTH, len);
+    }
 }
 
 // Clear the FIFOs

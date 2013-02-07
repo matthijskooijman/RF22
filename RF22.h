@@ -1147,6 +1147,8 @@ protected:
     volatile uint16_t   _txGood;
 
     volatile uint8_t    _lastRssi;
+
+    volatile uint8_t	_rxFifoThreshold;
 };
 
 /// @example rf22_client.pde
