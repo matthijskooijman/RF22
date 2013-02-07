@@ -1,7 +1,7 @@
 // RF22.h
 // Author: Mike McCauley (mikem@open.com.au)
 // Copyright (C) 2011 Mike McCauley
-// $Id: RF22.h,v 1.22 2012/09/05 23:31:39 mikem Exp mikem $
+// $Id: RF22.h,v 1.23 2013/02/06 21:33:56 mikem Exp mikem $
 //
 /// \mainpage RF22 library for Arduino
 ///
@@ -49,7 +49,7 @@
 /// Example Arduino programs are included to show the main modes of use.
 ///
 /// The version of the package that this documentation refers to can be downloaded 
-/// from http://www.open.com.au/mikem/arduino/RF22/RF22-1.24.zip
+/// from http://www.open.com.au/mikem/arduino/RF22/RF22-1.25.zip
 /// You can find the latest version at http://www.open.com.au/mikem/arduino/RF22
 ///
 /// You can also find online help and disussion at http://groups.google.com/group/rf22-arduino
@@ -313,7 +313,10 @@
 ///  \version 1.24 Fixed a problem that could cause corrupted receive messages if a transmit interrupted
 ///                a partial receive (as was common with eg ReliableDatagram with poor reception. 
 ///                Also fixed possible receive buffer overrun.
-///
+///  \version 1.25 More rigorous use of const, additional register defines (RF22_CRCHDRS RF22_VARPKLEN)
+///                and two methods (setPreambleLength() 
+///                and setSyncWords())made public. Patch provided by 
+///                Matthijs Kooijman.
 /// \author  Mike McCauley (mikem@open.com.au)
 
 #ifndef RF22_h
@@ -611,7 +614,9 @@
 
 // RF22_REG_30_DATA_ACCESS_CONTROL              0x30
 #define RF22_ENPACRX                            0x80
+#define RF22_MSBFRST                            0x00
 #define RF22_LSBFRST                            0x40
+#define RF22_CRCHDRS                            0x00
 #define RF22_CRCDONLY                           0x20
 #define RF22_ENPACTX                            0x08
 #define RF22_ENCRC                              0x04
@@ -642,6 +647,7 @@
 #define RF22_HDLEN_2                            0x20
 #define RF22_HDLEN_3                            0x30
 #define RF22_HDLEN_4                            0x40
+#define RF22_VARPKLEN                           0x00
 #define RF22_FIXPKLEN                           0x08
 #define RF22_SYNCLEN                            0x06
 #define RF22_SYNCLEN_1                          0x00
@@ -829,7 +835,7 @@ public:
     /// \param[in] reg Register number of the first register, one of RF22_REG_*
     /// \param[in] src Array of new register values to write. Must be at least len bytes
     /// \param[in] len Number of bytes to write
-    void           spiBurstWrite(uint8_t reg, uint8_t* src, uint8_t len);
+    void           spiBurstWrite(uint8_t reg, const uint8_t* src, uint8_t len);
 
     /// Reads and returns the device status register RF22_REG_02_DEVICE_STATUS
     /// \return The value of the device status register
@@ -929,7 +935,7 @@ public:
     /// bandwidths etc. You cas use this to configure the modem with custom configuraitons if none of the 
     /// canned configurations in ModemConfigChoice suit you.
     /// \param[in] config A ModemConfig structure containing values for the modem configuration registers.
-    void           setModemRegisters(ModemConfig* config);
+    void           setModemRegisters(const ModemConfig* config);
 
     /// Select one of the predefined modem configurations. If you need a modem configuration not provided 
     /// here, use setModemRegisters() with your own ModemConfig.
@@ -969,7 +975,7 @@ public:
     /// \param[in] data Array of data to be sent
     /// \param[in] len Number of bytes of data to send (> 0)
     /// \return true if the message length was valid and it was correctly queued for transmit
-    boolean        send(uint8_t* data, uint8_t len);
+    boolean        send(const uint8_t* data, uint8_t len);
 
     /// Blocks until the RF22 is not in mode RF22_MODE_TX (ie until the RF22 is not transmitting).
     /// This effectively waits until any previous transmit packet is finished being transmitted.
@@ -1007,19 +1013,25 @@ public:
     /// \param[in] prompt string to preface the print
     /// \param[in] buf Location of the buffer to print
     /// \param[in] len Length of the buffer in octets.
-    static void           printBuffer(char* prompt, uint8_t* buf, uint8_t len);
+    static void           printBuffer(const char* prompt, const uint8_t* buf, uint8_t len);
 
-protected:
+    /// Sets the length of the preamble
+    /// in 4-bit nibbles. 
+    /// Caution: this should be set to the same 
+    /// value on all nodes in your network. Default is 8.
     /// Sets the message preamble length in RF22_REG_34_PREAMBLE_LENGTH
     /// \param[in] nibbles Preamble length in nibbles of 4 bits each.  
     void           setPreambleLength(uint8_t nibbles);
 
     /// Sets the sync words for transmit and receive in registers RF22_REG_36_SYNC_WORD3 
     /// to RF22_REG_39_SYNC_WORD0
+    /// Caution: this should be set to the same 
+    /// value on all nodes in your network. Default is { 0x2d, 0xd4 }
     /// \param[in] syncWords Array of sync words
     /// \param[in] len Number of sync words to set
-    void           setSyncWords(uint8_t* syncWords, uint8_t len);
+    void           setSyncWords(const uint8_t* syncWords, uint8_t len);
 
+protected:
     /// This is a low level function to handle the interrupts for one instance of RF22.
     /// Called automatically by isr0() and isr1()
     /// Should not need to be called.
@@ -1037,13 +1049,13 @@ protected:
     /// \param[in] data Array of data bytes to be sent (1 to 255)
     /// \param[in] len Number of data bytes in data (> 0)
     /// \return true if the message length is valid
-    boolean           fillTxBuf(uint8_t* data, uint8_t len);
+    boolean           fillTxBuf(const uint8_t* data, uint8_t len);
 
     /// Appends the transmitter buffer with the data of a mesage to be sent
     /// \param[in] data Array of data bytes to be sent (0 to 255)
     /// \param[in] len Number of data bytes in data
     /// \return false if the resulting message would exceed RF22_MAX_MESSAGE_LEN, else true
-    boolean           appendTxBuf(uint8_t* data, uint8_t len);
+    boolean           appendTxBuf(const uint8_t* data, uint8_t len);
 
     /// Internal function to load the next fragment of 
     /// the current message into the transmitter FIFO

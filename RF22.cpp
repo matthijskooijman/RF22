@@ -1,7 +1,7 @@
 // RF22.cpp
 //
 // Copyright (C) 2011 Mike McCauley
-// $Id: RF22.cpp,v 1.16 2012/09/05 23:31:39 mikem Exp mikem $
+// $Id: RF22.cpp,v 1.17 2013/02/06 21:33:56 mikem Exp mikem $
 
 #include <RF22.h>
 #include <SPI.h>
@@ -337,7 +337,7 @@ void RF22::spiBurstRead(uint8_t reg, uint8_t* dest, uint8_t len)
     }
 }
 
-void RF22::spiBurstWrite(uint8_t reg, uint8_t* src, uint8_t len)
+void RF22::spiBurstWrite(uint8_t reg, const uint8_t* src, uint8_t len)
 {
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
     {
@@ -509,7 +509,7 @@ void RF22::setTxPower(uint8_t power)
 }
 
 // Sets registers from a canned modem configuration structure
-void RF22::setModemRegisters(ModemConfig* config)
+void RF22::setModemRegisters(const ModemConfig* config)
 {
     spiWrite(RF22_REG_1C_IF_FILTER_BANDWIDTH,                    config->reg_1c);
     spiWrite(RF22_REG_1F_CLOCK_RECOVERY_GEARSHIFT_OVERRIDE,      config->reg_1f);
@@ -541,7 +541,7 @@ void RF22::setPreambleLength(uint8_t nibbles)
 }
 
 // Caution doesnt set sync word len in Header Control 2 0x33
-void RF22::setSyncWords(uint8_t* syncWords, uint8_t len)
+void RF22::setSyncWords(const uint8_t* syncWords, uint8_t len)
 {
     spiBurstWrite(RF22_REG_36_SYNC_WORD3, syncWords, len);
 }
@@ -587,7 +587,7 @@ void RF22::waitPacketSent()
 }
 
 // Diagnostic help
-void RF22::printBuffer(char* prompt, uint8_t* buf, uint8_t len)
+void RF22::printBuffer(const char* prompt, const uint8_t* buf, uint8_t len)
 {
 #ifdef RF22_HAVE_SERIAL
     uint8_t i;
@@ -647,7 +647,7 @@ void RF22::restartTransmit()
     startTransmit();
 }
 
-boolean RF22::send(uint8_t* data, uint8_t len)
+boolean RF22::send(const uint8_t* data, uint8_t len)
 {
     waitPacketSent();
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
@@ -660,7 +660,7 @@ boolean RF22::send(uint8_t* data, uint8_t len)
     return true;
 }
 
-boolean RF22::fillTxBuf(uint8_t* data, uint8_t len)
+boolean RF22::fillTxBuf(const uint8_t* data, uint8_t len)
 {
     clearTxBuf();
     if (!len)
@@ -668,7 +668,7 @@ boolean RF22::fillTxBuf(uint8_t* data, uint8_t len)
     return appendTxBuf(data, len);
 }
 
-boolean RF22::appendTxBuf(uint8_t* data, uint8_t len)
+boolean RF22::appendTxBuf(const uint8_t* data, uint8_t len)
 {
     if (((uint16_t)_bufLen + len) > RF22_MAX_MESSAGE_LEN)
 	return false;
